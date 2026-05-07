@@ -14,11 +14,7 @@
     <PackageReference Include="Veldrid.SPIRV" Version="$(VeldridSpirvVersion)" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(UseStableVersions)' == 'true'" >
-    <PackageReference Include="Veldrid" Version="4.5.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(UseStableVersions)' != 'true'" >
+  <ItemGroup>
     <ProjectReference Include="..\Veldrid\Veldrid.csproj" />
   </ItemGroup>
 

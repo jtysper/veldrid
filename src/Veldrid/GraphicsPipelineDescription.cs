@@ -41,6 +41,11 @@ namespace Veldrid
         /// If <code>null</code>, the pipeline will use the value specified in <see cref="GraphicsDeviceOptions"/>.
         /// </summary>
         public ResourceBindingModel? ResourceBindingModel;
+        /// <summary>
+        /// The number of control points in each patch.
+        /// Only used when <see cref="PrimitiveTopology"/> is set to <see cref="PrimitiveTopology.PatchList"/>.
+        /// </summary>
+        public uint PatchControlPoints;
 
         /// <summary>
         /// Constructs a new <see cref="GraphicsPipelineDescription"/>.
@@ -74,6 +79,7 @@ namespace Veldrid
             ResourceLayouts = resourceLayouts;
             Outputs = outputs;
             ResourceBindingModel = null;
+            PatchControlPoints = 1;
         }
 
         /// <summary>
@@ -108,6 +114,7 @@ namespace Veldrid
             ResourceLayouts = new[] { resourceLayout };
             Outputs = outputs;
             ResourceBindingModel = null;
+            PatchControlPoints = 1;
         }
 
         /// <summary>
@@ -145,6 +152,7 @@ namespace Veldrid
             ResourceLayouts = resourceLayouts;
             Outputs = outputs;
             ResourceBindingModel = resourceBindingModel;
+            PatchControlPoints = 1;
         }
 
         /// <summary>
@@ -163,7 +171,8 @@ namespace Veldrid
                 && (ResourceBindingModel.HasValue && other.ResourceBindingModel.HasValue
                     ? ResourceBindingModel.Value == other.ResourceBindingModel.Value
                     : ResourceBindingModel.HasValue == other.ResourceBindingModel.HasValue)
-                && Outputs.Equals(other.Outputs);
+                && Outputs.Equals(other.Outputs)
+                && PatchControlPoints == other.PatchControlPoints;
         }
 
         /// <summary>
@@ -180,7 +189,8 @@ namespace Veldrid
                 ShaderSet.GetHashCode(),
                 HashHelper.Array(ResourceLayouts),
                 ResourceBindingModel.GetHashCode(),
-                Outputs.GetHashCode());
+                Outputs.GetHashCode(),
+                PatchControlPoints.GetHashCode());
         }
     }
 }

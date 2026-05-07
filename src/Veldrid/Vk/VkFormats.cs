@@ -266,6 +266,8 @@ namespace Veldrid.Vk
                     return VkPrimitiveTopology.LineStrip;
                 case PrimitiveTopology.PointList:
                     return VkPrimitiveTopology.PointList;
+                case PrimitiveTopology.PatchList:
+                    return VkPrimitiveTopology.PatchList;
                 default:
                     throw Illegal.Value<PrimitiveTopology>();
             }

@@ -54,8 +54,8 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseStableVersions)' == 'true'">
-    <PackageReference Include="Veldrid" Version="4.5.0" />
-    <PackageReference Include="Veldrid.SDL2" Version="4.5.0" />
+    <PackageReference Include="Veldrid" Version="$(VeldridVersion)" />
+    <PackageReference Include="Veldrid.SDL2" Version="$(VeldridVersion)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseStableVersions)' != 'true'">

@@ -38,6 +38,7 @@ namespace Veldrid.Vk
             RefCount = new ResourceRefCount(DisposeCore);
 
             VkGraphicsPipelineCreateInfo pipelineCI = VkGraphicsPipelineCreateInfo.New();
+            pipelineCI.pTessellationState = null;
 
             // Blend State
             VkPipelineColorBlendStateCreateInfo blendStateCI = VkPipelineColorBlendStateCreateInfo.New();
@@ -131,6 +132,14 @@ namespace Veldrid.Vk
             inputAssemblyCI.topology = VkFormats.VdToVkPrimitiveTopology(description.PrimitiveTopology);
 
             pipelineCI.pInputAssemblyState = &inputAssemblyCI;
+
+            // Tessellation State
+            VkPipelineTessellationStateCreateInfo tessellationCI = VkPipelineTessellationStateCreateInfo.New();
+            if (description.PrimitiveTopology == PrimitiveTopology.PatchList)
+            {
+                tessellationCI.patchControlPoints = description.PatchControlPoints;
+                pipelineCI.pTessellationState = &tessellationCI;
+            }
 
             // Vertex Input State
             VkPipelineVertexInputStateCreateInfo vertexInputCI = VkPipelineVertexInputStateCreateInfo.New();

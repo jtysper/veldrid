@@ -25,5 +25,9 @@
         /// A series of isolated points.
         /// </summary>
         PointList,
+        /// <summary>
+        /// A list of patch primitives.
+        /// </summary>
+        PatchList = 10,
     }
 }

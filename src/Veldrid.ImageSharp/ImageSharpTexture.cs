@@ -80,11 +80,11 @@ namespace Veldrid.ImageSharp
             for (uint level = 0; level < MipLevels; level++)
             {
                 Image<Rgba32> image = Images[level];
-                if (!image.TryGetSinglePixelSpan(out Span<Rgba32> pixelSpan))
+                if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
                 {
                     throw new VeldridException("Unable to get image pixelspan.");
                 }
-                fixed (void* pin = &MemoryMarshal.GetReference(pixelSpan))
+                fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
                 {
                     MappedResource map = gd.Map(staging, MapMode.Write, level);
                     uint rowWidth = (uint)(image.Width * 4);
@@ -126,11 +126,11 @@ namespace Veldrid.ImageSharp
             for (int level = 0; level < MipLevels; level++)
             {
                 Image<Rgba32> image = Images[level];
-                if (!image.TryGetSinglePixelSpan(out Span<Rgba32> pixelSpan))
+                if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemory))
                 {
                     throw new VeldridException("Unable to get image pixelspan.");
                 }
-                fixed (void* pin = &MemoryMarshal.GetReference(pixelSpan))
+                fixed (void* pin = &MemoryMarshal.GetReference(pixelMemory.Span))
                 {
                     gd.UpdateTexture(
                         tex,

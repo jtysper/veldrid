@@ -171,36 +171,36 @@ namespace Veldrid.ImageSharp
 
             for (int level = 0; level < MipLevels; level++)
             {
-                if (!CubemapTextures[PositiveXArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanPosX))
+                if (!CubemapTextures[PositiveXArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryPosX))
                 {
                     throw new VeldridException("Unable to get positive x pixelspan.");
                 }
-                if (!CubemapTextures[NegativeXArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanNegX))
+                if (!CubemapTextures[NegativeXArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryNegX))
                 {
                     throw new VeldridException("Unable to get negatve x pixelspan.");
                 }
-                if (!CubemapTextures[PositiveYArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanPosY))
+                if (!CubemapTextures[PositiveYArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryPosY))
                 {
                     throw new VeldridException("Unable to get positive y pixelspan.");
                 }
-                if (!CubemapTextures[NegativeYArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanNegY))
+                if (!CubemapTextures[NegativeYArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryNegY))
                 {
                     throw new VeldridException("Unable to get negatve y pixelspan.");
                 }
-                if (!CubemapTextures[PositiveZArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanPosZ))
+                if (!CubemapTextures[PositiveZArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryPosZ))
                 {
                     throw new VeldridException("Unable to get positive z pixelspan."); 
                 }
-                if (!CubemapTextures[NegativeZArrayLayer][level].TryGetSinglePixelSpan(out Span<Rgba32> pixelSpanNegZ))
+                if (!CubemapTextures[NegativeZArrayLayer][level].DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixelMemoryNegZ))
                 {
                     throw new VeldridException("Unable to get negatve z pixelspan.");
                 }
-                fixed (Rgba32* positiveXPin = &MemoryMarshal.GetReference(pixelSpanPosX))
-                fixed (Rgba32* negativeXPin = &MemoryMarshal.GetReference(pixelSpanNegX))
-                fixed (Rgba32* positiveYPin = &MemoryMarshal.GetReference(pixelSpanPosY))
-                fixed (Rgba32* negativeYPin = &MemoryMarshal.GetReference(pixelSpanNegY))
-                fixed (Rgba32* positiveZPin = &MemoryMarshal.GetReference(pixelSpanPosZ))
-                fixed (Rgba32* negativeZPin = &MemoryMarshal.GetReference(pixelSpanNegZ))
+                fixed (Rgba32* positiveXPin = &MemoryMarshal.GetReference(pixelMemoryPosX.Span))
+                fixed (Rgba32* negativeXPin = &MemoryMarshal.GetReference(pixelMemoryNegX.Span))
+                fixed (Rgba32* positiveYPin = &MemoryMarshal.GetReference(pixelMemoryPosY.Span))
+                fixed (Rgba32* negativeYPin = &MemoryMarshal.GetReference(pixelMemoryNegY.Span))
+                fixed (Rgba32* positiveZPin = &MemoryMarshal.GetReference(pixelMemoryPosZ.Span))
+                fixed (Rgba32* negativeZPin = &MemoryMarshal.GetReference(pixelMemoryNegZ.Span))
                 {
                     Image<Rgba32> image = CubemapTextures[0][level];
                     uint width = (uint)image.Width;
