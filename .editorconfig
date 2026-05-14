@@ -15,6 +15,7 @@ indent_size = 2
 
 [*.cs]
 indent_size = 4
+dotnet_diagnostic.CS1591.severity = none
 
 # Avoid "this." and "Me." if not necessary
 dotnet_style_qualification_for_field = false:suggestion
