@@ -1138,6 +1138,13 @@ namespace Veldrid.OpenGL
 
         internal override uint GetUniformBufferMinOffsetAlignmentCore() => _minUboOffsetAlignment;
 
+        public override double TimestampPeriod => 1.0;
+
+        public override bool GetQueryPoolResults(QueryPool queryPool, uint firstQuery, uint queryCount, ref ulong[] results)
+        {
+            return false;
+        }
+
         internal override uint GetStructuredBufferMinOffsetAlignmentCore() => _minSsboOffsetAlignment;
 
         private class ExecutionThread

@@ -1,4 +1,4 @@
-﻿using Vortice.Direct3D11;
+using Vortice.Direct3D11;
 using System;
 
 namespace Veldrid.D3D11
@@ -94,6 +94,11 @@ namespace Veldrid.D3D11
         public override Swapchain CreateSwapchain(ref SwapchainDescription description)
         {
             return new D3D11Swapchain(_gd, ref description);
+        }
+
+        protected override QueryPool CreateQueryPoolCore(ref QueryPoolDescription description)
+        {
+            return new D3D11QueryPool(ref description);
         }
 
         public void Dispose()

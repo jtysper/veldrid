@@ -682,6 +682,14 @@ namespace Veldrid.D3D11
                 d3d11Destination.DxgiFormat);
         }
 
+        protected override void WriteTimestampCore(QueryPool queryPool, uint index)
+        {
+        }
+
+        protected override void ResetQueryPoolCore(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         private void FlushViewports()
         {
             if (_viewportsChanged)

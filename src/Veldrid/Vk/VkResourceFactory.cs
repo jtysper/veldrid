@@ -93,5 +93,10 @@ namespace Veldrid.Vk
         {
             return new VkSwapchain(_gd, ref description);
         }
+
+        protected override QueryPool CreateQueryPoolCore(ref QueryPoolDescription description)
+        {
+            return new VkQueryPool(_gd, ref description);
+        }
     }
 }

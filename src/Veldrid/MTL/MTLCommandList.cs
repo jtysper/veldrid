@@ -673,6 +673,14 @@ namespace Veldrid.MTL
             ObjectiveCRuntime.release(rpDesc.NativePtr);
         }
 
+        protected override void WriteTimestampCore(QueryPool queryPool, uint index)
+        {
+        }
+
+        protected override void ResetQueryPoolCore(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         protected override void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetCount, ref uint dynamicOffsets)
         {
             if (!_computeResourceSets[slot].Equals(set, dynamicOffsetCount, ref dynamicOffsets))

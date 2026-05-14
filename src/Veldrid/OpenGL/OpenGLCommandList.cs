@@ -102,6 +102,14 @@ namespace Veldrid.OpenGL
             _currentCommands.ResolveTexture(source, destination);
         }
 
+        protected override void WriteTimestampCore(QueryPool queryPool, uint index)
+        {
+        }
+
+        protected override void ResetQueryPoolCore(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         public override void End()
         {
             _currentCommands.End();

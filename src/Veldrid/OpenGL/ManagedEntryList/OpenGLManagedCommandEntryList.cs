@@ -152,6 +152,14 @@ namespace Veldrid.OpenGL.ManagedEntryList
 
         }
 
+        public void WriteTimestamp(QueryPool queryPool, uint index)
+        {
+        }
+
+        public void ResetQueryPool(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         public unsafe void ExecuteAll(OpenGLCommandExecutor executor)
         {
             foreach (OpenGLCommandEntry entry in _commands)

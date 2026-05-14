@@ -23,6 +23,8 @@ namespace Veldrid.OpenGL
         void SetVertexBuffer(uint index, DeviceBuffer buffer, uint offset);
         void SetViewport(uint index, ref Viewport viewport);
         void ResolveTexture(Texture source, Texture destination);
+        void WriteTimestamp(QueryPool queryPool, uint index);
+        void ResetQueryPool(QueryPool queryPool, uint firstQuery, uint queryCount);
         void UpdateBuffer(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
         void ExecuteAll(OpenGLCommandExecutor executor);
         void DispatchIndirect(DeviceBuffer indirectBuffer, uint offset);

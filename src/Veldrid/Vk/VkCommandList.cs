@@ -440,6 +440,28 @@ namespace Veldrid.Vk
             }
         }
 
+        protected override void WriteTimestampCore(QueryPool queryPool, uint index)
+        {
+            VkQueryPool vkPool = Util.AssertSubtype<QueryPool, VkQueryPool>(queryPool);
+            vkCmdWriteTimestamp(_cb, VkPipelineStageFlags.BottomOfPipe, vkPool.DeviceQueryPool, index);
+        }
+
+        protected override void ResetQueryPoolCore(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+            VkQueryPool vkPool = Util.AssertSubtype<QueryPool, VkQueryPool>(queryPool);
+            vkCmdResetQueryPool(_cb, vkPool.DeviceQueryPool, firstQuery, queryCount);
+        }
+
+        public override string Name
+        {
+            get => _name;
+            set
+            {
+                _name = value;
+                _gd.SetResourceName(this, value);
+            }
+        }
+
         public override void End()
         {
             if (!_commandBufferBegun)
@@ -1207,16 +1229,6 @@ namespace Veldrid.Vk
                 &memoryBarrier,                     // pMemoryBarriers
                 0, null,
                 0, null);
-        }
-
-        public override string Name
-        {
-            get => _name;
-            set
-            {
-                _name = value;
-                _gd.SetResourceName(this, value);
-            }
         }
 
         private VkBuffer GetStagingBuffer(uint size)

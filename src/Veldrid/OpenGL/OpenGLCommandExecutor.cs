@@ -1049,6 +1049,14 @@ namespace Veldrid.OpenGL
             CheckLastError();
         }
 
+        public void WriteTimestamp(QueryPool queryPool, uint index)
+        {
+        }
+
+        public void ResetQueryPool(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         private uint GetUniformBaseIndex(uint slot, bool graphics)
         {
             OpenGLPipeline pipeline = graphics ? _graphicsPipeline : _computePipeline;

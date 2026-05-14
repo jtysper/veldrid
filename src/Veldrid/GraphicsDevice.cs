@@ -39,7 +39,7 @@ namespace Veldrid
 
         /// <summary>
         /// Gets a value identifying whether texture coordinates begin in the top left corner of a Texture.
-        /// If true, (0, 0) refers to the top-left texel of a Texture. If false, (0, 0) refers to the bottom-left 
+        /// If true, (0, 0) refers to the top-left texel of a Texture. If false, (0, 0) refers to the bottom-left
         /// texel of a Texture. This property is useful for determining how the output of a Framebuffer should be sampled.
         /// </summary>
         public abstract bool IsUvOriginTopLeft { get; }
@@ -105,6 +105,21 @@ namespace Veldrid
         /// accepting dynamic offsets, each offset must be a multiple of this value.
         /// </summary>
         public uint StructuredBufferMinOffsetAlignment => GetStructuredBufferMinOffsetAlignmentCore();
+
+        /// <summary>
+        /// Gets the period of GPU timestamps, in nanoseconds.
+        /// </summary>
+        public abstract double TimestampPeriod { get; }
+
+        /// <summary>
+        /// Retrieves the results of a <see cref="QueryPool"/>.
+        /// </summary>
+        /// <param name="queryPool">The <see cref="QueryPool"/> to retrieve results from.</param>
+        /// <param name="firstQuery">The index of the first query to retrieve.</param>
+        /// <param name="queryCount">The number of queries to retrieve.</param>
+        /// <param name="results">An array which will be filled with the query results.</param>
+        /// <returns>True if the results were successfully retrieved; false otherwise.</returns>
+        public abstract bool GetQueryPoolResults(QueryPool queryPool, uint firstQuery, uint queryCount, ref ulong[] results);
 
         internal abstract uint GetUniformBufferMinOffsetAlignmentCore();
         internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();

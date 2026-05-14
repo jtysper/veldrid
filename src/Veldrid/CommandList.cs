@@ -745,6 +745,47 @@ namespace Veldrid
         protected abstract void ResolveTextureCore(Texture source, Texture destination);
 
         /// <summary>
+        /// Writes a timestamp value to the given <see cref="QueryPool"/>.
+        /// </summary>
+        /// <param name="queryPool">The <see cref="QueryPool"/> to write into.</param>
+        /// <param name="index">The index within the pool to write to.</param>
+        public void WriteTimestamp(QueryPool queryPool, uint index)
+        {
+#if VALIDATE_USAGE
+            if (index >= queryPool.QueryCount)
+            {
+                throw new VeldridException($"The {nameof(index)} parameter of {nameof(WriteTimestamp)} must be less than the {nameof(QueryPool.QueryCount)} of the {nameof(QueryPool)}.");
+            }
+#endif
+            WriteTimestampCore(queryPool, index);
+        }
+
+        /// <summary></summary>
+        /// <param name="queryPool"></param>
+        /// <param name="index"></param>
+        protected abstract void WriteTimestampCore(QueryPool queryPool, uint index);
+
+        /// <summary>
+        /// Resets the given <see cref="QueryPool"/>.
+        /// </summary>
+        /// <param name="queryPool">The pool to reset.</param>
+        /// <param name="firstQuery">The index of the first query to reset.</param>
+        /// <param name="queryCount">The number of queries to reset.</param>
+        public void ResetQueryPool(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+#if VALIDATE_USAGE
+            if (firstQuery + queryCount > queryPool.QueryCount)
+            {
+                throw new VeldridException($"The sum of {nameof(firstQuery)} and {nameof(queryCount)} must be less than or equal to the {nameof(QueryPool.QueryCount)} of the {nameof(QueryPool)}.");
+            }
+#endif
+            ResetQueryPoolCore(queryPool, firstQuery, queryCount);
+        }
+
+        /// <summary></summary>
+        protected abstract void ResetQueryPoolCore(QueryPool queryPool, uint firstQuery, uint queryCount);
+
+        /// <summary>
         /// Updates a <see cref="DeviceBuffer"/> region with new data.
         /// This function must be used with a blittable value type <typeparamref name="T"/>.
         /// </summary>

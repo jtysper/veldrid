@@ -84,5 +84,10 @@ namespace Veldrid.MTL
         {
             return new MTLSwapchain(_gd, ref description);
         }
+
+        protected override QueryPool CreateQueryPoolCore(ref QueryPoolDescription description)
+        {
+            return new MTLQueryPool(ref description);
+        }
     }
 }

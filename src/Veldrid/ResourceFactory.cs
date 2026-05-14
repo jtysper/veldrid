@@ -485,5 +485,24 @@ namespace Veldrid
         /// <param name="description">The desired properties of the created object.</param>
         /// <returns>A new <see cref="Swapchain"/>.</returns>
         public abstract Swapchain CreateSwapchain(ref SwapchainDescription description);
+
+        /// <summary>
+        /// Creates a new <see cref="QueryPool"/>.
+        /// </summary>
+        /// <param name="description">The desired properties of the created object.</param>
+        /// <returns>A new <see cref="QueryPool"/>.</returns>
+        public QueryPool CreateQueryPool(QueryPoolDescription description) => CreateQueryPoolCore(ref description);
+
+        /// <summary>
+        /// Creates a new <see cref="QueryPool"/>.
+        /// </summary>
+        /// <param name="description">The desired properties of the created object.</param>
+        /// <returns>A new <see cref="QueryPool"/>.</returns>
+        public QueryPool CreateQueryPool(ref QueryPoolDescription description) => CreateQueryPoolCore(ref description);
+
+        /// <summary></summary>
+        /// <param name="description"></param>
+        /// <returns></returns>
+        protected abstract QueryPool CreateQueryPoolCore(ref QueryPoolDescription description);
     }
 }

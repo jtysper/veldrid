@@ -594,6 +594,14 @@ namespace Veldrid.MTL
         }
 
         internal override uint GetUniformBufferMinOffsetAlignmentCore() => MetalFeatures.IsMacOS ? 16u : 256u;
+
+        public override double TimestampPeriod => 1.0;
+
+        public override bool GetQueryPoolResults(QueryPool queryPool, uint firstQuery, uint queryCount, ref ulong[] results)
+        {
+            return false;
+        }
+
         internal override uint GetStructuredBufferMinOffsetAlignmentCore() => 16u;
     }
 

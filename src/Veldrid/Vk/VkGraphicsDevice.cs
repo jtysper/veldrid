@@ -1520,6 +1520,26 @@ namespace Veldrid.Vk
             pool.EndAndSubmit(cb);
         }
 
+        public override double TimestampPeriod => _physicalDeviceProperties.limits.timestampPeriod;
+
+        public override bool GetQueryPoolResults(QueryPool queryPool, uint firstQuery, uint queryCount, ref ulong[] results)
+        {
+            VkQueryPool vkPool = Util.AssertSubtype<QueryPool, VkQueryPool>(queryPool);
+            fixed (ulong* resultsPtr = &results[0])
+            {
+                VkResult result = vkGetQueryPoolResults(
+                    _device,
+                    vkPool.DeviceQueryPool,
+                    firstQuery,
+                    queryCount,
+                    (UIntPtr)(queryCount * sizeof(ulong)),
+                    resultsPtr,
+                    sizeof(ulong),
+                    VkQueryResultFlags.Wait | VkQueryResultFlags._64);
+                return result == VkResult.Success;
+            }
+        }
+
         internal override uint GetUniformBufferMinOffsetAlignmentCore()
             => (uint)_physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
 

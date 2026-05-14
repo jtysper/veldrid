@@ -524,6 +524,14 @@ namespace Veldrid.OpenGL.NoAllocEntryList
             AddEntry(ResolveTextureEntryID, ref entry);
         }
 
+        public void WriteTimestamp(QueryPool queryPool, uint index)
+        {
+        }
+
+        public void ResetQueryPool(QueryPool queryPool, uint firstQuery, uint queryCount)
+        {
+        }
+
         public void UpdateBuffer(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
         {
             StagingBlock stagingBlock = _memoryPool.Stage(source, sizeInBytes);

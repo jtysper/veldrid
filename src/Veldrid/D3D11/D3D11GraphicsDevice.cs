@@ -646,7 +646,14 @@ namespace Veldrid.D3D11
             Util.AssertSubtype<Fence, D3D11Fence>(fence).Reset();
         }
 
-        internal override uint GetUniformBufferMinOffsetAlignmentCore() => 256u;
+        public override double TimestampPeriod => 1.0;
+
+        public override bool GetQueryPoolResults(QueryPool queryPool, uint firstQuery, uint queryCount, ref ulong[] results)
+        {
+            return false;
+        }
+
+        internal override uint GetUniformBufferMinOffsetAlignmentCore() => 256;
 
         internal override uint GetStructuredBufferMinOffsetAlignmentCore() => 16;
 

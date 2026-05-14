@@ -1,4 +1,4 @@
-﻿using static Veldrid.OpenGLBinding.OpenGLNative;
+using static Veldrid.OpenGLBinding.OpenGLNative;
 using Veldrid.OpenGL;
 using Veldrid.OpenGLBinding;
 using System;
@@ -95,7 +95,12 @@ namespace Veldrid.OpenGL
 
         public override Swapchain CreateSwapchain(ref SwapchainDescription description)
         {
-            throw new NotSupportedException("OpenGL does not support creating Swapchain objects.");
+            throw new NotSupportedException("OpenGL does not support the creation of Swapchains.");
+        }
+
+        protected override QueryPool CreateQueryPoolCore(ref QueryPoolDescription description)
+        {
+            return new OpenGLQueryPool(ref description);
         }
     }
 }

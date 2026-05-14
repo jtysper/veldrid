@@ -116,5 +116,12 @@ namespace Veldrid.Utilities
             DisposeCollector.Add(tex);
             return tex;
         }
+
+        protected override QueryPool CreateQueryPoolCore(ref QueryPoolDescription description)
+        {
+            QueryPool qp = Factory.CreateQueryPool(ref description);
+            DisposeCollector.Add(qp);
+            return qp;
+        }
     }
 }
