@@ -11,7 +11,7 @@ namespace Veldrid.ImGuiHexa
     /// Can render draw lists produced by ImGui.
     /// Also provides functions for updating ImGui input.
     /// </summary>
-    public class ImGuiRenderer : IDisposable
+    public unsafe class ImGuiRenderer : IDisposable
     {
         private GraphicsDevice _gd;
         private readonly Assembly _assembly;
@@ -21,21 +21,18 @@ namespace Veldrid.ImGuiHexa
         private DeviceBuffer _vertexBuffer;
         private DeviceBuffer _indexBuffer;
         private DeviceBuffer _projMatrixBuffer;
-        private Texture _fontTexture;
         private Shader _vertexShader;
         private Shader _fragmentShader;
         private ResourceLayout _layout;
         private ResourceLayout _textureLayout;
         private Pipeline _pipeline;
         private ResourceSet _mainResourceSet;
-        private ResourceSet _fontTextureResourceSet;
-        private IntPtr _fontAtlasID = (IntPtr)1;
 
         private int _windowWidth;
         private int _windowHeight;
         private Vector2 _scaleFactor = Vector2.One;
 
-        // Image trackers
+        // Image trackers for User-Bound Textures
         private readonly Dictionary<TextureView, ResourceSetInfo> _setsByView
             = new Dictionary<TextureView, ResourceSetInfo>();
         private readonly Dictionary<Texture, TextureView> _autoViewsByTexture
@@ -43,26 +40,22 @@ namespace Veldrid.ImGuiHexa
         private readonly Dictionary<IntPtr, ResourceSetInfo> _viewsById = new Dictionary<IntPtr, ResourceSetInfo>();
         private readonly List<IDisposable> _ownedResources = new List<IDisposable>();
         private int _lastAssignedID = 100;
+
+        // Image trackers for ImGui-Managed Textures (Fonts, etc.)
+        private readonly Dictionary<IntPtr, ImGuiManagedTexture> _managedTextures = new Dictionary<IntPtr, ImGuiManagedTexture>();
+        private IntPtr _fontTextureId = (IntPtr)(-1);
+        private struct ImGuiManagedTexture
+        {
+            public Texture Texture;
+            public TextureView View;
+            public ResourceSet ResourceSet;
+        }
+
         private bool _frameBegun;
 
-        /// <summary>
-        /// Constructs a new ImGuiRenderer.
-        /// </summary>
-        /// <param name="gd">The GraphicsDevice used to create and update resources.</param>
-        /// <param name="outputDescription">The output format.</param>
-        /// <param name="width">The initial width of the rendering target. Can be resized.</param>
-        /// <param name="height">The initial height of the rendering target. Can be resized.</param>
         public ImGuiRenderer(GraphicsDevice gd, OutputDescription outputDescription, int width, int height)
             : this(gd, outputDescription, width, height, ColorSpaceHandling.Legacy) { }
 
-        /// <summary>
-        /// Constructs a new ImGuiRenderer.
-        /// </summary>
-        /// <param name="gd">The GraphicsDevice used to create and update resources.</param>
-        /// <param name="outputDescription">The output format.</param>
-        /// <param name="width">The initial width of the rendering target. Can be resized.</param>
-        /// <param name="height">The initial height of the rendering target. Can be resized.</param>
-        /// <param name="colorSpaceHandling">Identifies how the renderer should treat vertex colors.</param>
         public ImGuiRenderer(GraphicsDevice gd, OutputDescription outputDescription, int width, int height, ColorSpaceHandling colorSpaceHandling)
         {
             _gd = gd;
@@ -71,14 +64,15 @@ namespace Veldrid.ImGuiHexa
             _windowWidth = width;
             _windowHeight = height;
 
-            ImGui.CreateContext();
-            
-            unsafe
-            {
-                ImGuiIOPtr io = ImGui.GetIO();
-                io.Fonts.AddFontDefault();
-                io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines;
-            }
+            ImGuiContextPtr context = ImGui.CreateContext();
+            ImGui.SetCurrentContext(context);
+
+            ImGuiIOPtr io = ImGui.GetIO();
+            io.Fonts.AddFontDefault();
+            io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines;
+
+            // HEXA.NET PATTERN: Aktiviere Textur-Events und Vertex-Offsets
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset | ImGuiBackendFlags.RendererHasTextures;
 
             CreateDeviceResources(gd, outputDescription);
 
@@ -101,25 +95,26 @@ namespace Veldrid.ImGuiHexa
 
         public void CreateDeviceResources(GraphicsDevice gd, OutputDescription outputDescription)
             => CreateDeviceResources(gd, outputDescription, _colorSpaceHandling);
+
         public void CreateDeviceResources(GraphicsDevice gd, OutputDescription outputDescription, ColorSpaceHandling colorSpaceHandling)
         {
             _gd = gd;
             _colorSpaceHandling = colorSpaceHandling;
             ResourceFactory factory = gd.ResourceFactory;
             _vertexBuffer = factory.CreateBuffer(new BufferDescription(10000, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
-            _vertexBuffer.Name = "ImGui Vertex Buffer";
+            _vertexBuffer.Name = "ImGui.NET Vertex Buffer";
             _indexBuffer = factory.CreateBuffer(new BufferDescription(2000, BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-            _indexBuffer.Name = "ImGui Index Buffer";
+            _indexBuffer.Name = "ImGui.NET Index Buffer";
 
             _projMatrixBuffer = factory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
-            _projMatrixBuffer.Name = "ImGui Projection Buffer";
+            _projMatrixBuffer.Name = "ImGui.NET Projection Buffer";
 
             byte[] vertexShaderBytes = LoadEmbeddedShaderCode(gd.ResourceFactory, "imgui-vertex", ShaderStages.Vertex, _colorSpaceHandling);
             byte[] fragmentShaderBytes = LoadEmbeddedShaderCode(gd.ResourceFactory, "imgui-frag", ShaderStages.Fragment, _colorSpaceHandling);
             _vertexShader = factory.CreateShader(new ShaderDescription(ShaderStages.Vertex, vertexShaderBytes, _gd.BackendType == GraphicsBackend.Vulkan ? "main" : "VS"));
-            _vertexShader.Name = "ImGui Vertex Shader";
+            _vertexShader.Name = "ImGui.NET Vertex Shader";
             _fragmentShader = factory.CreateShader(new ShaderDescription(ShaderStages.Fragment, fragmentShaderBytes, _gd.BackendType == GraphicsBackend.Vulkan ? "main" : "FS"));
-            _fragmentShader.Name = "ImGui Fragment Shader";
+            _fragmentShader.Name = "ImGui.NET Fragment Shader";
 
             VertexLayoutDescription[] vertexLayouts = new VertexLayoutDescription[]
             {
@@ -132,10 +127,10 @@ namespace Veldrid.ImGuiHexa
             _layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("ProjectionMatrixBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
                 new ResourceLayoutElementDescription("MainSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
-            _layout.Name = "ImGui Resource Layout";
+            _layout.Name = "ImGui.NET Resource Layout";
             _textureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)));
-            _textureLayout.Name = "ImGui Texture Layout";
+            _textureLayout.Name = "ImGui.NET Texture Layout";
 
             GraphicsPipelineDescription pd = new GraphicsPipelineDescription(
                 BlendStateDescription.SingleAlphaBlend,
@@ -154,26 +149,138 @@ namespace Veldrid.ImGuiHexa
                 outputDescription,
                 ResourceBindingModel.Default);
             _pipeline = factory.CreateGraphicsPipeline(ref pd);
-            _pipeline.Name = "ImGui Pipeline";
+            _pipeline.Name = "ImGui.NET Pipeline";
 
             _mainResourceSet = factory.CreateResourceSet(new ResourceSetDescription(_layout,
                 _projMatrixBuffer,
                 gd.PointSampler));
-            _mainResourceSet.Name = "ImGui Main Resource Set";
+            _mainResourceSet.Name = "ImGui.NET Main Resource Set";
 
-            RecreateFontDeviceTexture(gd);
+            // HINWEIS: Font-Textur-Erstellung wurde hier entfernt.
+            // Wird jetzt automatisch via ProcessTextureUpdates() durch ImGui getriggert.
         }
 
-        /// <summary>
-        /// Gets or creates a handle for a texture to be drawn with ImGui.
-        /// Pass the returned handle to Image() or ImageButton().
-        /// </summary>
+        // ---------------------------------------------------------------------
+        // HEXA.NET TEXTURE MANAGEMENT PATTERN (Aus XNA übernommen)
+        // ---------------------------------------------------------------------
+        private void ProcessTextureUpdates(ImDrawDataPtr drawData)
+        {
+            if (drawData.Textures.Data == null) return;
+
+            for (int i = 0; i < drawData.Textures.Size; i++)
+            {
+                ImTextureDataPtr textureData = drawData.Textures.Data[i];
+                UpdateTexture(textureData);
+            }
+        }
+
+        private void UpdateTexture(ImTextureDataPtr textureData)
+        {
+            switch (textureData.Status)
+            {
+                case ImTextureStatus.WantCreate:
+                    CreateManagedTexture(textureData);
+                    break;
+                case ImTextureStatus.WantUpdates:
+                    UpdateManagedTextureData(textureData);
+                    break;
+                case ImTextureStatus.WantDestroy:
+                    DestroyManagedTexture(textureData);
+                    break;
+                case ImTextureStatus.Ok:
+                    break;
+            }
+        }
+
+        private void CreateManagedTexture(ImTextureDataPtr textureData)
+        {
+            PixelFormat format = textureData.Format == ImTextureFormat.Rgba32 ? PixelFormat.R8_G8_B8_A8_UNorm : PixelFormat.R8_UNorm;
+            Texture texture = _gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
+                (uint)textureData.Width, (uint)textureData.Height, 1, 1, format, TextureUsage.Sampled));
+            texture.Name = "ImGui Managed Texture";
+
+            if (textureData.Pixels != null)
+            {
+                uint bytesPerPixel = textureData.Format == ImTextureFormat.Rgba32 ? 4u : 1u;
+                _gd.UpdateTexture(
+                    texture,
+                    (IntPtr)textureData.Pixels,
+                    (uint)(bytesPerPixel * textureData.Width * textureData.Height),
+                    0, 0, 0,
+                    (uint)textureData.Width, (uint)textureData.Height, 1,
+                    0, 0);
+            }
+
+            TextureView view = _gd.ResourceFactory.CreateTextureView(texture);
+            ResourceSet resourceSet = _gd.ResourceFactory.CreateResourceSet(new ResourceSetDescription(_textureLayout, view));
+
+            IntPtr texId = (IntPtr)textureData.GetTexID().Handle;
+            if (_fontTextureId == (IntPtr)(-1)) _fontTextureId = texId;
+            _managedTextures[texId] = new ImGuiManagedTexture { Texture = texture, View = view, ResourceSet = resourceSet };
+
+            textureData.SetStatus(ImTextureStatus.Ok);
+        }
+
+        private void UpdateManagedTextureData(ImTextureDataPtr textureData)
+        {
+            IntPtr texId = (IntPtr)textureData.GetTexID().Handle;
+            if (!_managedTextures.TryGetValue(texId, out ImGuiManagedTexture managed)) return;
+
+            Texture texture = managed.Texture;
+            PixelFormat newFormat = textureData.Format == ImTextureFormat.Rgba32 ? PixelFormat.R8_G8_B8_A8_UNorm : PixelFormat.R8_UNorm;
+
+            if (texture.Width != textureData.Width || texture.Height != textureData.Height || texture.Format != newFormat)
+            {
+                managed.ResourceSet.Dispose();
+                managed.View.Dispose();
+                managed.Texture.Dispose();
+
+                texture = _gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
+                    (uint)textureData.Width, (uint)textureData.Height, 1, 1, newFormat, TextureUsage.Sampled));
+                texture.Name = "ImGui Managed Texture";
+
+                managed.Texture = texture;
+                managed.View = _gd.ResourceFactory.CreateTextureView(texture);
+                managed.ResourceSet = _gd.ResourceFactory.CreateResourceSet(new ResourceSetDescription(_textureLayout, managed.View));
+
+                _managedTextures[texId] = managed;
+            }
+
+            if (textureData.Pixels != null)
+            {
+                uint bytesPerPixel = textureData.Format == ImTextureFormat.Rgba32 ? 4u : 1u;
+                _gd.UpdateTexture(
+                    texture,
+                    (IntPtr)textureData.Pixels,
+                    (uint)(bytesPerPixel * textureData.Width * textureData.Height),
+                    0, 0, 0,
+                    (uint)textureData.Width, (uint)textureData.Height, 1,
+                    0, 0);
+            }
+
+            textureData.SetStatus(ImTextureStatus.Ok);
+        }
+
+        private void DestroyManagedTexture(ImTextureDataPtr textureData)
+        {
+            IntPtr texId = (IntPtr)textureData.GetTexID().Handle;
+            if (_managedTextures.TryGetValue(texId, out ImGuiManagedTexture managed))
+            {
+                managed.ResourceSet.Dispose();
+                managed.View.Dispose();
+                managed.Texture.Dispose();
+                _managedTextures.Remove(texId);
+            }
+            textureData.SetStatus(ImTextureStatus.Ok);
+        }
+        // ---------------------------------------------------------------------
+
         public IntPtr GetOrCreateImGuiBinding(ResourceFactory factory, TextureView textureView)
         {
             if (!_setsByView.TryGetValue(textureView, out ResourceSetInfo rsi))
             {
                 ResourceSet resourceSet = factory.CreateResourceSet(new ResourceSetDescription(_textureLayout, textureView));
-                resourceSet.Name = $"ImGui {textureView.Name} Resource Set";
+                resourceSet.Name = $"ImGui.NET {textureView.Name} Resource Set";
                 rsi = new ResourceSetInfo(GetNextImGuiBindingID(), resourceSet);
 
                 _setsByView.Add(textureView, rsi);
@@ -201,16 +308,12 @@ namespace Veldrid.ImGuiHexa
             return (IntPtr)newID;
         }
 
-        /// <summary>
-        /// Gets or creates a handle for a texture to be drawn with ImGui.
-        /// Pass the returned handle to Image() or ImageButton().
-        /// </summary>
         public IntPtr GetOrCreateImGuiBinding(ResourceFactory factory, Texture texture)
         {
             if (!_autoViewsByTexture.TryGetValue(texture, out TextureView textureView))
             {
                 textureView = factory.CreateTextureView(texture);
-                textureView.Name = $"ImGui {texture.Name} View";
+                textureView.Name = $"ImGui.NET {texture.Name} View";
                 _autoViewsByTexture.Add(texture, textureView);
                 _ownedResources.Add(textureView);
             }
@@ -229,13 +332,15 @@ namespace Veldrid.ImGuiHexa
             }
         }
 
-        /// <summary>
-        /// Retrieves the shader texture binding for the given helper handle.
-        /// </summary>
         public ResourceSet GetImageResourceSet(IntPtr imGuiBinding)
         {
             if (!_viewsById.TryGetValue(imGuiBinding, out ResourceSetInfo rsi))
             {
+                // Fallback auf die intern von ImGui erzeugten Texturen (inkl. Font-Atlas)
+                if (_managedTextures.TryGetValue(imGuiBinding, out ImGuiManagedTexture managed))
+                {
+                    return managed.ResourceSet;
+                }
                 throw new InvalidOperationException("No registered ImGui binding with id " + imGuiBinding.ToString());
             }
 
@@ -256,52 +361,25 @@ namespace Veldrid.ImGuiHexa
             _lastAssignedID = 100;
         }
 
-        private byte[] LoadEmbeddedShaderCode(
-            ResourceFactory factory,
-            string name,
-            ShaderStages stage,
-            ColorSpaceHandling colorSpaceHandling)
+        private byte[] LoadEmbeddedShaderCode(ResourceFactory factory, string name, ShaderStages stage, ColorSpaceHandling colorSpaceHandling)
         {
             switch (factory.BackendType)
             {
                 case GraphicsBackend.Direct3D11:
-                {
                     if (stage == ShaderStages.Vertex && colorSpaceHandling == ColorSpaceHandling.Legacy) { name += "-legacy"; }
-                    string resourceName = name + ".hlsl.bytes";
-                    return GetEmbeddedResourceBytes(resourceName);
-                }
+                    return GetEmbeddedResourceBytes(name + ".hlsl.bytes");
                 case GraphicsBackend.OpenGL:
-                {
                     if (stage == ShaderStages.Vertex && colorSpaceHandling == ColorSpaceHandling.Legacy) { name += "-legacy"; }
-                    string resourceName = name + ".glsl";
-                    return GetEmbeddedResourceBytes(resourceName);
-                }
+                    return GetEmbeddedResourceBytes(name + ".glsl");
                 case GraphicsBackend.OpenGLES:
-                {
                     if (stage == ShaderStages.Vertex && colorSpaceHandling == ColorSpaceHandling.Legacy) { name += "-legacy"; }
-                    string resourceName = name + ".glsles";
-                    return GetEmbeddedResourceBytes(resourceName);
-                }
+                    return GetEmbeddedResourceBytes(name + ".glsles");
                 case GraphicsBackend.Vulkan:
-                {
-                    string resourceName = name + ".spv";
-                    return GetEmbeddedResourceBytes(resourceName);
-                }
+                    return GetEmbeddedResourceBytes(name + ".spv");
                 case GraphicsBackend.Metal:
-                {
-                    string resourceName = name + ".metallib";
-                    return GetEmbeddedResourceBytes(resourceName);
-                }
+                    return GetEmbeddedResourceBytes(name + ".metallib");
                 default:
                     throw new NotImplementedException();
-            }
-        }
-
-        private string GetEmbeddedResourceText(string resourceName)
-        {
-            using (StreamReader sr = new StreamReader(_assembly.GetManifestResourceStream(resourceName)))
-            {
-                return sr.ReadToEnd();
             }
         }
 
@@ -315,58 +393,7 @@ namespace Veldrid.ImGuiHexa
             }
         }
 
-        /// <summary>
-        /// Recreates the device texture used to render text.
-        /// </summary>
-        public unsafe void RecreateFontDeviceTexture() => RecreateFontDeviceTexture(_gd);
-
-        /// <summary>
-        /// Recreates the device texture used to render text.
-        /// </summary>
-        public unsafe void RecreateFontDeviceTexture(GraphicsDevice gd)
-        {
-            ImGuiIOPtr io = ImGui.GetIO();
-            // Build
-            byte* pixels;
-            int width, height, bytesPerPixel;
-            io.Fonts.GetTexDataAsRGBA32(&pixels, &width, &height, &bytesPerPixel);
-
-            // Store our identifier
-            io.Fonts.SetTexID(new ImTextureID((nint)_fontAtlasID));
-
-            _fontTexture?.Dispose();
-            _fontTexture = gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-                (uint)width,
-                (uint)height,
-                1,
-                1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Sampled));
-            _fontTexture.Name = "ImGui Font Texture";
-            gd.UpdateTexture(
-                _fontTexture,
-                (IntPtr)pixels,
-                (uint)(bytesPerPixel * width * height),
-                0,
-                0,
-                0,
-                (uint)width,
-                (uint)height,
-                1,
-                0,
-                0);
-
-            _fontTextureResourceSet?.Dispose();
-            _fontTextureResourceSet = gd.ResourceFactory.CreateResourceSet(new ResourceSetDescription(_textureLayout, _fontTexture));
-            _fontTextureResourceSet.Name = "ImGui Font Texture Resource Set";
-
-            io.Fonts.ClearTexData();
-        }
-
-        /// <summary>
-        /// Renders the ImGui draw list data.
-        /// </summary>
-        public unsafe void Render(GraphicsDevice gd, CommandList cl)
+        public void Render(GraphicsDevice gd, CommandList cl)
         {
             if (_frameBegun)
             {
@@ -376,9 +403,6 @@ namespace Veldrid.ImGuiHexa
             }
         }
 
-        /// <summary>
-        /// Updates ImGui input and IO configuration state.
-        /// </summary>
         public void Update(float deltaSeconds, InputSnapshot snapshot)
         {
             BeginUpdate(deltaSeconds);
@@ -386,42 +410,26 @@ namespace Veldrid.ImGuiHexa
             EndUpdate();
         }
 
-        /// <summary>
-        /// Called before we handle the input in <see cref="Update(float, InputSnapshot)"/>.
-        /// This render ImGui and update the state.
-        /// </summary>
         protected void BeginUpdate(float deltaSeconds)
         {
-            if (_frameBegun)
-            {
-                ImGui.Render();
-            }
-
+            if (_frameBegun) ImGui.Render();
             SetPerFrameImGuiData(deltaSeconds);
         }
 
-        /// <summary>
-        /// Called at the end of <see cref="Update(float, InputSnapshot)"/>.
-        /// This tells ImGui that we are on the next frame.
-        /// </summary>
         protected void EndUpdate()
         {
             _frameBegun = true;
             ImGui.NewFrame();
         }
 
-        /// <summary>
-        /// Sets per-frame data based on the associated window.
-        /// This is called by Update(float).
-        /// </summary>
-        private unsafe void SetPerFrameImGuiData(float deltaSeconds)
+        private void SetPerFrameImGuiData(float deltaSeconds)
         {
             ImGuiIOPtr io = ImGui.GetIO();
             io.DisplaySize = new Vector2(
                 _windowWidth / _scaleFactor.X,
                 _windowHeight / _scaleFactor.Y);
             io.DisplayFramebufferScale = _scaleFactor;
-            io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
+            io.DeltaTime = deltaSeconds;
         }
 
         private bool TryMapKey(Key key, out ImGuiKey result)
@@ -429,7 +437,7 @@ namespace Veldrid.ImGuiHexa
             ImGuiKey keyToImGuiKeyShortcut(Key keyToConvert, Key startKey1, ImGuiKey startKey2)
             {
                 int changeFromStart1 = (int)keyToConvert - (int)startKey1;
-                return startKey2 + changeFromStart1;
+                return (ImGuiKey)((int)startKey2 + changeFromStart1);
             }
 
             if (key >= Key.F1 && key <= Key.F12)
@@ -449,6 +457,7 @@ namespace Veldrid.ImGuiHexa
             }
             else if (key >= Key.Number0 && key <= Key.Number9)
             {
+                // HINWEIS: ImGui._0 wurde in Hexa zu ImGui.Key0
                 result = keyToImGuiKeyShortcut(key, Key.Number0, ImGuiKey.Key0);
                 return true;
             }
@@ -456,143 +465,57 @@ namespace Veldrid.ImGuiHexa
             switch (key)
             {
                 case Key.ShiftLeft:
-                case Key.ShiftRight:
-                    result = ImGuiKey.ModShift;
-                    return true;
+                case Key.ShiftRight: result = ImGuiKey.ModShift; return true;
                 case Key.ControlLeft:
-                case Key.ControlRight:
-                    result = ImGuiKey.ModCtrl;
-                    return true;
+                case Key.ControlRight: result = ImGuiKey.ModCtrl; return true;
                 case Key.AltLeft:
-                case Key.AltRight:
-                    result = ImGuiKey.ModAlt;
-                    return true;
+                case Key.AltRight: result = ImGuiKey.ModAlt; return true;
                 case Key.WinLeft:
-                case Key.WinRight:
-                    result = ImGuiKey.ModSuper;
-                    return true;
-                case Key.Menu:
-                    result = ImGuiKey.Menu;
-                    return true;
-                case Key.Up:
-                    result = ImGuiKey.UpArrow;
-                    return true;
-                case Key.Down:
-                    result = ImGuiKey.DownArrow;
-                    return true;
-                case Key.Left:
-                    result = ImGuiKey.LeftArrow;
-                    return true;
-                case Key.Right:
-                    result = ImGuiKey.RightArrow;
-                    return true;
-                case Key.Enter:
-                    result = ImGuiKey.Enter;
-                    return true;
-                case Key.Escape:
-                    result = ImGuiKey.Escape;
-                    return true;
-                case Key.Space:
-                    result = ImGuiKey.Space;
-                    return true;
-                case Key.Tab:
-                    result = ImGuiKey.Tab;
-                    return true;
-                case Key.BackSpace:
-                    result = ImGuiKey.Backspace;
-                    return true;
-                case Key.Insert:
-                    result = ImGuiKey.Insert;
-                    return true;
-                case Key.Delete:
-                    result = ImGuiKey.Delete;
-                    return true;
-                case Key.PageUp:
-                    result = ImGuiKey.PageUp;
-                    return true;
-                case Key.PageDown:
-                    result = ImGuiKey.PageDown;
-                    return true;
-                case Key.Home:
-                    result = ImGuiKey.Home;
-                    return true;
-                case Key.End:
-                    result = ImGuiKey.End;
-                    return true;
-                case Key.CapsLock:
-                    result = ImGuiKey.CapsLock;
-                    return true;
-                case Key.ScrollLock:
-                    result = ImGuiKey.ScrollLock;
-                    return true;
-                case Key.PrintScreen:
-                    result = ImGuiKey.PrintScreen;
-                    return true;
-                case Key.Pause:
-                    result = ImGuiKey.Pause;
-                    return true;
-                case Key.NumLock:
-                    result = ImGuiKey.NumLock;
-                    return true;
-                case Key.KeypadDivide:
-                    result = ImGuiKey.KeypadDivide;
-                    return true;
-                case Key.KeypadMultiply:
-                    result = ImGuiKey.KeypadMultiply;
-                    return true;
-                case Key.KeypadSubtract:
-                    result = ImGuiKey.KeypadSubtract;
-                    return true;
-                case Key.KeypadAdd:
-                    result = ImGuiKey.KeypadAdd;
-                    return true;
-                case Key.KeypadDecimal:
-                    result = ImGuiKey.KeypadDecimal;
-                    return true;
-                case Key.KeypadEnter:
-                    result = ImGuiKey.KeypadEnter;
-                    return true;
-                case Key.Tilde:
-                    result = ImGuiKey.GraveAccent;
-                    return true;
-                case Key.Minus:
-                    result = ImGuiKey.Minus;
-                    return true;
-                case Key.Plus:
-                    result = ImGuiKey.Equal;
-                    return true;
-                case Key.BracketLeft:
-                    result = ImGuiKey.LeftBracket;
-                    return true;
-                case Key.BracketRight:
-                    result = ImGuiKey.RightBracket;
-                    return true;
-                case Key.Semicolon:
-                    result = ImGuiKey.Semicolon;
-                    return true;
-                case Key.Quote:
-                    result = ImGuiKey.Apostrophe;
-                    return true;
-                case Key.Comma:
-                    result = ImGuiKey.Comma;
-                    return true;
-                case Key.Period:
-                    result = ImGuiKey.Period;
-                    return true;
-                case Key.Slash:
-                    result = ImGuiKey.Slash;
-                    return true;
+                case Key.WinRight: result = ImGuiKey.ModSuper; return true;
+                case Key.Menu: result = ImGuiKey.Menu; return true;
+                case Key.Up: result = ImGuiKey.UpArrow; return true;
+                case Key.Down: result = ImGuiKey.DownArrow; return true;
+                case Key.Left: result = ImGuiKey.LeftArrow; return true;
+                case Key.Right: result = ImGuiKey.RightArrow; return true;
+                case Key.Enter: result = ImGuiKey.Enter; return true;
+                case Key.Escape: result = ImGuiKey.Escape; return true;
+                case Key.Space: result = ImGuiKey.Space; return true;
+                case Key.Tab: result = ImGuiKey.Tab; return true;
+                case Key.BackSpace: result = ImGuiKey.Backspace; return true;
+                case Key.Insert: result = ImGuiKey.Insert; return true;
+                case Key.Delete: result = ImGuiKey.Delete; return true;
+                case Key.PageUp: result = ImGuiKey.PageUp; return true;
+                case Key.PageDown: result = ImGuiKey.PageDown; return true;
+                case Key.Home: result = ImGuiKey.Home; return true;
+                case Key.End: result = ImGuiKey.End; return true;
+                case Key.CapsLock: result = ImGuiKey.CapsLock; return true;
+                case Key.ScrollLock: result = ImGuiKey.ScrollLock; return true;
+                case Key.PrintScreen: result = ImGuiKey.PrintScreen; return true;
+                case Key.Pause: result = ImGuiKey.Pause; return true;
+                case Key.NumLock: result = ImGuiKey.NumLock; return true;
+                case Key.KeypadDivide: result = ImGuiKey.KeypadDivide; return true;
+                case Key.KeypadMultiply: result = ImGuiKey.KeypadMultiply; return true;
+                case Key.KeypadSubtract: result = ImGuiKey.KeypadSubtract; return true;
+                case Key.KeypadAdd: result = ImGuiKey.KeypadAdd; return true;
+                case Key.KeypadDecimal: result = ImGuiKey.KeypadDecimal; return true;
+                case Key.KeypadEnter: result = ImGuiKey.KeypadEnter; return true;
+                case Key.Tilde: result = ImGuiKey.GraveAccent; return true;
+                case Key.Minus: result = ImGuiKey.Minus; return true;
+                case Key.Plus: result = ImGuiKey.Equal; return true;
+                case Key.BracketLeft: result = ImGuiKey.LeftBracket; return true;
+                case Key.BracketRight: result = ImGuiKey.RightBracket; return true;
+                case Key.Semicolon: result = ImGuiKey.Semicolon; return true;
+                case Key.Quote: result = ImGuiKey.Apostrophe; return true;
+                case Key.Comma: result = ImGuiKey.Comma; return true;
+                case Key.Period: result = ImGuiKey.Period; return true;
+                case Key.Slash: result = ImGuiKey.Slash; return true;
                 case Key.BackSlash:
-                case Key.NonUSBackSlash:
-                    result = ImGuiKey.Backslash;
-                    return true;
-                default:
-                    result = ImGuiKey.None;
-                    return false;
+                case Key.NonUSBackSlash: result = ImGuiKey.Backslash; return true;
+                default: result = ImGuiKey.GamepadBack; return false;
             }
         }
 
-        private unsafe void UpdateImGuiInput(InputSnapshot snapshot)
+        private void UpdateImGuiInput(InputSnapshot snapshot)
         {
             ImGuiIOPtr io = ImGui.GetIO();
             io.AddMousePosEvent(snapshot.MousePosition.X, snapshot.MousePosition.Y);
@@ -618,35 +541,35 @@ namespace Veldrid.ImGuiHexa
             }
         }
 
-        private unsafe void RenderImDrawData(ImDrawDataPtr draw_data, GraphicsDevice gd, CommandList cl)
+        private void RenderImDrawData(ImDrawDataPtr draw_data, GraphicsDevice gd, CommandList cl)
         {
+            if (draw_data.CmdListsCount == 0) return;
+
+            // HEXA.NET PATTERN: Hier werden die Font- und interne Texturen synchronisiert!
+            ProcessTextureUpdates(draw_data);
+
             uint vertexOffsetInVertices = 0;
             uint indexOffsetInElements = 0;
-
-            if (draw_data.CmdListsCount == 0)
-            {
-                return;
-            }
 
             uint totalVBSize = (uint)(draw_data.TotalVtxCount * sizeof(ImDrawVert));
             if (totalVBSize > _vertexBuffer.SizeInBytes)
             {
-                _vertexBuffer.Dispose();
+                gd.DisposeWhenIdle(_vertexBuffer);
                 _vertexBuffer = gd.ResourceFactory.CreateBuffer(new BufferDescription((uint)(totalVBSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
-                _vertexBuffer.Name = "ImGui Vertex Buffer";
+                _vertexBuffer.Name = $"ImGui.NET Vertex Buffer";
             }
 
             uint totalIBSize = (uint)(draw_data.TotalIdxCount * sizeof(ushort));
             if (totalIBSize > _indexBuffer.SizeInBytes)
             {
-                _indexBuffer.Dispose();
+                gd.DisposeWhenIdle(_indexBuffer);
                 _indexBuffer = gd.ResourceFactory.CreateBuffer(new BufferDescription((uint)(totalIBSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-                _indexBuffer.Name = "ImGui Index Buffer";
+                _indexBuffer.Name = $"ImGui.NET Index Buffer";
             }
 
             for (int i = 0; i < draw_data.CmdListsCount; i++)
             {
-                ImDrawListPtr cmd_list = draw_data.CmdLists.Data[i];
+                ImDrawListPtr cmd_list = draw_data.CmdLists[i];
 
                 cl.UpdateBuffer(
                     _vertexBuffer,
@@ -664,93 +587,87 @@ namespace Veldrid.ImGuiHexa
                 indexOffsetInElements += (uint)cmd_list.IdxBuffer.Size;
             }
 
-            // Setup orthographic projection matrix into our constant buffer
-            {
-                ImGuiIOPtr io = ImGui.GetIO();
-
-                Matrix4x4 mvp = Matrix4x4.CreateOrthographicOffCenter(
-                    0f,
-                    io.DisplaySize.X,
-                    io.DisplaySize.Y,
-                    0.0f,
-                    -1.0f,
-                    1.0f);
-
-                _gd.UpdateBuffer(_projMatrixBuffer, 0, ref mvp);
-            }
+            Matrix4x4 mvp = Matrix4x4.CreateOrthographicOffCenter(
+                0f, ImGui.GetIO().DisplaySize.X, ImGui.GetIO().DisplaySize.Y, 0.0f, -1.0f, 1.0f);
+            _gd.UpdateBuffer(_projMatrixBuffer, 0, ref mvp);
 
             cl.SetVertexBuffer(0, _vertexBuffer);
             cl.SetIndexBuffer(_indexBuffer, IndexFormat.UInt16);
             cl.SetPipeline(_pipeline);
             cl.SetGraphicsResourceSet(0, _mainResourceSet);
 
-            Vector2 scale = ImGui.GetIO().DisplayFramebufferScale;
-            draw_data.ScaleClipRects(scale);
+            draw_data.ScaleClipRects(ImGui.GetIO().DisplayFramebufferScale);
 
-            // Render command lists
             int vtx_offset = 0;
             int idx_offset = 0;
             for (int n = 0; n < draw_data.CmdListsCount; n++)
             {
-                ImDrawListPtr cmd_list = draw_data.CmdLists.Data[n];
+                ImDrawListPtr cmd_list = draw_data.CmdLists[n];
                 for (int cmd_i = 0; cmd_i < cmd_list.CmdBuffer.Size; cmd_i++)
                 {
-                    ImDrawCmdPtr pcmd = new ImDrawCmdPtr(&cmd_list.CmdBuffer.Data[cmd_i]);
-                    if (pcmd.Handle->UserCallback != null)
+                    ImDrawCmd* pcmd = &cmd_list.CmdBuffer.Data[cmd_i];
+                    if (pcmd->UserCallback != null)
                     {
                         throw new NotImplementedException();
                     }
                     else
                     {
-                        if (pcmd.TextureId.Handle != 0)
+                        // HEXA.NET PATTERN: Nutze pcmd->TexRef anstatt pcmd->TextureId
+                        ImTextureRef textureRef = pcmd->TexRef;
+                        ImTextureID texId = textureRef.GetTexID();
+
+                        IntPtr handle = (IntPtr)texId.Handle;
+                        if (handle == IntPtr.Zero && _fontTextureId != (IntPtr)(-1))
                         {
-                            if (pcmd.TextureId.Handle == (nint)(void*)_fontAtlasID)
-                            {
-                                cl.SetGraphicsResourceSet(1, _fontTextureResourceSet);
-                            }
-                            else
-                            {
-                                cl.SetGraphicsResourceSet(1, GetImageResourceSet((IntPtr)pcmd.TextureId.Handle));
-                            }
+                            handle = _fontTextureId;
                         }
 
-                        cl.SetScissorRect(
-                            0,
-                            (uint)pcmd.ClipRect.X,
-                            (uint)pcmd.ClipRect.Y,
-                            (uint)(pcmd.ClipRect.Z - pcmd.ClipRect.X),
-                            (uint)(pcmd.ClipRect.W - pcmd.ClipRect.Y));
+                        cl.SetGraphicsResourceSet(1, GetImageResourceSet(handle));
 
-                        cl.DrawIndexed(pcmd.ElemCount, 1, pcmd.IdxOffset + (uint)idx_offset, (int)(pcmd.VtxOffset + vtx_offset), 0);
+                        uint clipX = (uint)Math.Max(0, pcmd->ClipRect.X);
+                        uint clipY = (uint)Math.Max(0, pcmd->ClipRect.Y);
+                        uint clipWidth = (uint)Math.Max(0, Math.Min(_windowWidth, pcmd->ClipRect.Z) - clipX);
+                        uint clipHeight = (uint)Math.Max(0, Math.Min(_windowHeight, pcmd->ClipRect.W) - clipY);
+
+                        if (clipWidth > 0 && clipHeight > 0)
+                        {
+                            cl.SetScissorRect(0, clipX, clipY, clipWidth, clipHeight);
+                            cl.DrawIndexed(pcmd->ElemCount, 1, pcmd->IdxOffset + (uint)idx_offset, (int)(pcmd->VtxOffset + vtx_offset), 0);
+                        }
                     }
                 }
-
                 idx_offset += cmd_list.IdxBuffer.Size;
                 vtx_offset += cmd_list.VtxBuffer.Size;
             }
         }
 
-        /// <summary>
-        /// Frees all graphics resources used by the renderer.
-        /// </summary>
         public void Dispose()
         {
-            _vertexBuffer.Dispose();
-            _indexBuffer.Dispose();
-            _projMatrixBuffer.Dispose();
-            _fontTexture.Dispose();
-            _vertexShader.Dispose();
-            _fragmentShader.Dispose();
-            _layout.Dispose();
-            _textureLayout.Dispose();
-            _pipeline.Dispose();
-            _mainResourceSet.Dispose();
-            _fontTextureResourceSet.Dispose();
+            _vertexBuffer?.Dispose();
+            _indexBuffer?.Dispose();
+            _projMatrixBuffer?.Dispose();
+            _vertexShader?.Dispose();
+            _fragmentShader?.Dispose();
+            _layout?.Dispose();
+            _textureLayout?.Dispose();
+            _pipeline?.Dispose();
+            _mainResourceSet?.Dispose();
 
             foreach (IDisposable resource in _ownedResources)
             {
                 resource.Dispose();
             }
+
+            // Cleanup für durch ImGui-generierte Texturen
+            foreach (var managed in _managedTextures.Values)
+            {
+                managed.ResourceSet.Dispose();
+                managed.View.Dispose();
+                managed.Texture.Dispose();
+            }
+            _managedTextures.Clear();
+
+            ImGui.DestroyContext();
         }
 
         private struct ResourceSetInfo

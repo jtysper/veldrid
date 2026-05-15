@@ -50,7 +50,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hexa.NET.ImGui" Version="1.1.0" />
+    <PackageReference Include="Hexa.NET.ImGui" Version="2.2.9" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseStableVersions)' == 'true'">

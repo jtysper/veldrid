@@ -1,19 +1,18 @@
 ﻿namespace Veldrid.ImGuiHexa
 {
     /// <summary>
-    /// Identifies the kind of color space handling that an <see cref="ImGuiRenderer"/> uses.
+    /// Identifies how an ImGuiRenderer should treat vertex colors.
     /// </summary>
     public enum ColorSpaceHandling
     {
         /// <summary>
-        /// Legacy-style color space handling. In this mode, the renderer will not convert sRGB vertex colors into linear space
-        /// before blending them.
+        /// Vertex colors are passed to the shader as-is.
         /// </summary>
-        Legacy = 0,
+        Legacy,
+
         /// <summary>
-        /// Improved color space handling. In this mode, the render will convert sRGB vertex colors into linear space before
-        /// blending them with colors from user Textures.
+        /// Vertex colors are converted from sRGB to linear space before being rendered.
         /// </summary>
-        Linear = 1,
+        Linear
     }
 }
