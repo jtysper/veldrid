@@ -64,12 +64,14 @@ namespace Veldrid.ImGuiHexa
             _windowWidth = width;
             _windowHeight = height;
 
-            ImGuiContextPtr context = ImGui.CreateContext();
-            ImGui.SetCurrentContext(context);
+            ImGuiContextPtr context = ImGui.GetCurrentContext();
+            if (context.Handle == null)
+            {
+                context = ImGui.CreateContext();
+                ImGui.SetCurrentContext(context);
+            }
 
             ImGuiIOPtr io = ImGui.GetIO();
-            io.Fonts.AddFontDefault();
-            io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines;
 
             // HEXA.NET PATTERN: Aktiviere Textur-Events und Vertex-Offsets
             io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset | ImGuiBackendFlags.RendererHasTextures;
@@ -78,8 +80,7 @@ namespace Veldrid.ImGuiHexa
 
             SetPerFrameImGuiData(1f / 60f);
 
-            ImGui.NewFrame();
-            _frameBegun = true;
+            _frameBegun = false;
         }
 
         public void WindowResized(int width, int height)
